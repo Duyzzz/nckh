@@ -101,8 +101,6 @@ public:
 	static void useRangeFilter(boolean enabled);
 	// Used for the smoothing algorithm (Exponential Moving Average). newValue must be >= 2. Default 15.
 	static void setRangeFilterValue(uint16_t newValue);
-	// Set to true for 6.8 Mbps mode airtime calculation, false for 110 kbps (default)
-	static void use6M8Mode(boolean enabled);
 	
 	//Handlers:
 	static void attachNewRange(void (* handleNewRange)(void)) { _handleNewRange = handleNewRange; };
@@ -187,7 +185,7 @@ private:
 	static uint32_t    _rangingCountPeriod;
 	//ranging filter
 	static volatile boolean _useRangeFilter;
-	static boolean _use6M8Mode;
+	static byte             _currentMode[3];
 	static uint16_t         _rangeFilterValue;
 	//_bias correction
 	static char  _bias_RSL[17]; // TODO remove or use

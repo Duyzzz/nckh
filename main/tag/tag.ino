@@ -10,6 +10,21 @@
 
 #define TAG_ADDR "7D:00:22:EA:82:60:3B:9B"
 
+// Select ranging mode — must match anchor
+// Standard modes:
+//   DW1000.MODE_LONGDATA_RANGE_LOWPOWER   110 kbps, 16 MHz PRF, preamble 2048 (long range)
+//   DW1000.MODE_LONGDATA_RANGE_ACCURACY   110 kbps, 64 MHz PRF, preamble 2048 (long range, better accuracy)
+//   DW1000.MODE_SHORTDATA_FAST_LOWPOWER   6.8 Mbps, 16 MHz PRF, preamble 128  (fast)
+//   DW1000.MODE_LONGDATA_FAST_LOWPOWER    6.8 Mbps, 16 MHz PRF, preamble 1024 (fast, longer preamble)
+//   DW1000.MODE_SHORTDATA_FAST_ACCURACY   6.8 Mbps, 64 MHz PRF, preamble 128  (fast, better accuracy)
+//   DW1000.MODE_LONGDATA_FAST_ACCURACY    6.8 Mbps, 64 MHz PRF, preamble 1024 (fast, best accuracy)
+// Additional options:
+//   DW1000.MODE_MEDDATA_MID_LOWPOWER      850 kbps, 16 MHz PRF, preamble 1024 (mid range/speed)
+//   DW1000.MODE_MEDDATA_MID_ACCURACY      850 kbps, 64 MHz PRF, preamble 1024 (mid range/speed, better accuracy)
+//   DW1000.MODE_SHORTDATA_FASTEST_LOWPOWER  6.8 Mbps, 16 MHz PRF, preamble 64 (fastest, shortest range)
+//   DW1000.MODE_SHORTDATA_FASTEST_ACCURACY  6.8 Mbps, 64 MHz PRF, preamble 64 (fastest, better accuracy)
+#define RANGING_MODE DW1000.MODE_LONGDATA_RANGE_LOWPOWER
+
 #define SPI_SCK 18
 #define SPI_MISO 19
 #define SPI_MOSI 23
@@ -38,9 +53,6 @@ void setup()
     // Antenna delay calibration - decrease to reduce measured distance
     DW1000.setAntennaDelay(16500);
 
-    // Airtime calculation mode: false = 110 kbps (default), true = 6.8 Mbps
-    DW1000Ranging.use6M8Mode(true);  // Uncomment for 6.8 Mbps mode
-
     // Attach handlers
     DW1000Ranging.attachNewRange(newRange);
     DW1000Ranging.attachNewDevice(newDevice);
@@ -51,7 +63,7 @@ void setup()
     DW1000Ranging.useRangeFilter(true);
 
     // Start as tag
-    DW1000Ranging.startAsTag(TAG_ADDR, DW1000.MODE_LONGDATA_RANGE_LOWPOWER);
+    DW1000Ranging.startAsTag(TAG_ADDR, RANGING_MODE);
 
     Serial.println("Tag ready with custom data support");
 }

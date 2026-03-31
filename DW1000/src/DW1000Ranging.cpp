@@ -27,7 +27,6 @@
  */
 
 
-#include "DW1000RangingConfig.h"
 #include "DW1000Ranging.h"
 #include "DW1000Device.h"
 
@@ -52,8 +51,8 @@ volatile byte    DW1000RangingClass::_expectedMsgId;
 // range filter
 volatile boolean DW1000RangingClass::_useRangeFilter = false;
 uint16_t DW1000RangingClass::_rangeFilterValue = 15;
-// airtime mode (false = 110 kbps, true = 6.8 Mbps)
-boolean DW1000RangingClass::_use6M8Mode = false;
+// current ranging mode {dataRate, pulseFreq, preambleLen} — set by configureNetwork
+byte DW1000RangingClass::_currentMode[3] = {0x00, 0x01, 0x0A}; // default: MODE_LONGDATA_RANGE_LOWPOWER
 
 // message sent/received state
 volatile boolean DW1000RangingClass::_sentAck     = false;
@@ -127,6 +126,7 @@ void DW1000RangingClass::configureNetwork(uint16_t deviceAddress, uint16_t netwo
 	DW1000.setNetworkId(networkId);
 	DW1000.enableMode(mode);
 	DW1000.commitConfiguration();
+	memcpy(_currentMode, mode, 3);
 	
 }
 
@@ -337,28 +337,38 @@ void DW1000RangingClass::attachCustomDataReceived(void (*handler)(void)) {
 
 // Calculate RF air time based on frame length
 uint32_t DW1000RangingClass::calculateAirTimeUs(uint8_t frameLen) {
-	uint32_t preambleUs, sfdUs, phrUs, dataUs;
+	// Decode preamble symbol count from mode constant
+	uint16_t preambleSymbols;
+	switch (_currentMode[2]) {
+		case 0x01: preambleSymbols = 64;   break;
+		case 0x05: preambleSymbols = 128;  break;
+		case 0x09: preambleSymbols = 256;  break;
+		case 0x0D: preambleSymbols = 512;  break;
+		case 0x02: preambleSymbols = 1024; break;
+		case 0x06: preambleSymbols = 1536; break;
+		case 0x0A: preambleSymbols = 2048; break;
+		case 0x03: preambleSymbols = 4096; break;
+		default:   preambleSymbols = 128;  break;
+	}
 
-	if (_use6M8Mode) {
-		// For 6.8 Mbps mode: 128 preamble, 16 MHz PRF
-		// Preamble: 128 symbols * 993.59 ns/symbol = 127.2 us
-		// SFD: 8 symbols * 993.59 ns = 7.9 us
-		// PHR: 21.5 us (for 6.8 Mbps)
-		// Data: frameLen * 8 bits / 6800 kbps
-		preambleUs = 127;
-		sfdUs = 8;
-		phrUs = 22;
-		dataUs = (uint32_t)frameLen * 8 * 1000 / 6800;
-	} else {
-		// For 110 kbps mode (default): 1024 preamble, 16 MHz PRF
-		// Preamble: 1024 symbols * 993.59 ns/symbol = 1017.4 us
-		// SFD: 64 symbols * 993.59 ns = 63.6 us
-		// PHR: 172.3 us (for 110 kbps)
-		// Data: frameLen * 8 bits / 110 kbps
-		preambleUs = 1017;
-		sfdUs = 64;
-		phrUs = 172;
-		dataUs = (uint32_t)frameLen * 8 * 1000 / 110;
+	// Symbol time: 993.59 ns for 16 MHz PRF, 1017.63 ns for 64 MHz PRF
+	uint32_t symNs = (_currentMode[1] == 0x02) ? 1018 : 994;
+
+	uint32_t preambleUs = (uint32_t)preambleSymbols * symNs / 1000;
+
+	// SFD: 64 symbols for 110 kbps, 8 symbols for 850 kbps / 6.8 Mbps
+	uint32_t sfdUs = (_currentMode[0] == 0x00) ? (64 * symNs / 1000) : (8 * symNs / 1000);
+
+	// PHR: ~172 us for 110 kbps, ~22 us for 850 kbps and 6.8 Mbps
+	uint32_t phrUs = (_currentMode[0] == 0x00) ? 172 : 22;
+
+	// Data payload time
+	uint32_t dataUs;
+	switch (_currentMode[0]) {
+		case 0x00: dataUs = (uint32_t)frameLen * 8000 / 110;  break; // 110 kbps
+		case 0x01: dataUs = (uint32_t)frameLen * 8000 / 850;  break; // 850 kbps
+		case 0x02: dataUs = (uint32_t)frameLen * 8000 / 6800; break; // 6.8 Mbps
+		default:   dataUs = (uint32_t)frameLen * 8000 / 6800; break;
 	}
 
 	return preambleUs + sfdUs + phrUs + dataUs;
@@ -776,9 +786,6 @@ void DW1000RangingClass::setRangeFilterValue(uint16_t newValue) {
 	}
 }
 
-void DW1000RangingClass::use6M8Mode(boolean enabled) {
-	_use6M8Mode = enabled;
-}
 
 
 /* ###########################################################################
